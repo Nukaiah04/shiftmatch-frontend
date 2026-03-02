@@ -4,6 +4,13 @@ import { FaEye } from "react-icons/fa";
 import { MdLogout } from "react-icons/md";
 import { MdDashboardCustomize } from "react-icons/md";
 import { baseUrl, notify, urls } from "../constants/config";
+import { getStatusColor } from "../utils/statusColors";
+import { messaging } from "../firebase";
+import { onMessage } from "firebase/messaging";
+import AdvancedPeopleLoader from "../components/AdvancedPeopleLoader";
+import { GrDocumentUser, GrUserWorker } from "react-icons/gr";
+import { IoLocationOutline } from "react-icons/io5";
+import { MdOutlineCastForEducation } from "react-icons/md";
 
 import {
   Building2,
@@ -38,7 +45,7 @@ const Dashboard2 = () => {
     pincode: "",
     country: "",
   });
-
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [selectedWorker, setSelectedWorker] = useState(null);
   const [workerDocuments, setWorkerDocuments] = useState([]);
   const [showDocumentsPanel, setShowDocumentsPanel] = useState(false);
@@ -68,19 +75,34 @@ const Dashboard2 = () => {
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [isCreatingDept, setIsCreatingDept] = useState(false);
   const [isCreatingDocType, setIsCreatingDocType] = useState(false);
+  const [designations, setDesignations] = useState([]);
+  const [showAddDesignation, setShowAddDesignation] = useState(false);
+  const [newDesignation, setNewDesignation] = useState("");
+  const [designationStatus, setDesignationStatus] = useState("Active");
+  const [editingDesignationId, setEditingDesignationId] = useState(null);
+  const [selectedWorkerAddress, setSelectedWorkerAddress] = useState(null);
+  const [showRejectModal, setShowRejectModal] = useState(false);
+  const [rejectReason, setRejectReason] = useState("");
+  const [selectedDocId, setSelectedDocId] = useState(null);
+  const [isRejecting, setIsRejecting] = useState(false);
+  const [selectedDocName, setSelectedDocName] = useState("");
+  const [loadingWorkers, setLoadingWorkers] = useState(false);
+  const [loadingHealthcareWorkers, setLoadingHealthcareWorkers] =
+    useState(false);
+  const [loadingDepartments, setLoadingDepartments] = useState(false);
+  const [verifyingAction, setVerifyingAction] = useState(null);
+  const [processingDocId, setProcessingDocId] = useState(null);
+
   // Workers Pagination
   const [workersPage, setWorkersPage] = useState(1);
+  const [workersLimit] = useState(10);
+  const [workersTotalPages, setWorkersTotalPages] = useState(1);
+  const [workersTotalCount, setWorkersTotalCount] = useState(0);
 
   // Departments Pagination
   const [departmentsPage, setDepartmentsPage] = useState(1);
 
   const itemsPerPage = 10;
-  const workersIndexOfLast = workersPage * itemsPerPage;
-  const workersIndexOfFirst = workersIndexOfLast - itemsPerPage;
-
-  const currentWorkers = workers.slice(workersIndexOfFirst, workersIndexOfLast);
-
-  const workersTotalPages = Math.ceil(workers.length / itemsPerPage);
 
   const goToNextWorkersPage = () => {
     if (workersPage < workersTotalPages) {
@@ -168,6 +190,122 @@ const Dashboard2 = () => {
       setHealthcarePage((prev) => prev - 1);
     }
   };
+  const handleLogout = async () => {
+    try {
+      const token = sessionStorage.getItem("token");
+      const fcmToken = sessionStorage.getItem("fcmToken");
+
+      if (token && fcmToken) {
+        await fetch(
+          `${import.meta.env.VITE_API_BASE_URL}${import.meta.env.VITE_HEALTHCARE_WORKER_UPDATE_FCM_API}`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({
+              fcm: fcmToken,
+              type: "Logout",
+            }),
+          },
+        );
+
+        console.log(" FCM removed on logout");
+      }
+    } catch (err) {
+      console.error("Logout FCM error:", err);
+    } finally {
+      sessionStorage.clear();
+      notify(false, "Logged out successfully");
+
+      setTimeout(() => {
+        navigate("/login");
+      }, 600);
+    }
+  };
+
+  const handleSaveDesignation = async () => {
+    if (!newDesignation.trim()) {
+      notify(false, "Designation name required");
+      return;
+    }
+
+    try {
+      const bodyData = {
+        designationName: newDesignation.trim(),
+        status: designationStatus,
+        ...(editingDesignationId && { sId: editingDesignationId }),
+      };
+      console.log("Sending Body 👉", bodyData);
+
+      const res = await fetch(
+        `${import.meta.env.VITE_API_BASE_URL}${import.meta.env.VITE_DESIGNATION_CREATE_UPDATE}`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${sessionStorage.getItem("token")}`,
+          },
+          body: JSON.stringify(bodyData),
+        },
+      );
+
+      const data = await res.json();
+
+      if (!res.ok || data.status === false) {
+        notify(false, data.message || "Failed");
+        return;
+      }
+
+      notify(
+        true,
+        editingDesignationId ? "Updated successfully" : "Created successfully",
+      );
+
+      setShowAddDesignation(false);
+      setEditingDesignationId(null);
+      setNewDesignation("");
+      setDesignationStatus("Active");
+
+      fetchDesignations();
+    } catch (err) {
+      notify(false, "Server error");
+    }
+  };
+  const fetchAddressByUserId = async (userId) => {
+    try {
+      const res = await fetch(
+        `${import.meta.env.VITE_API_BASE_URL}${import.meta.env.VITE_ADDRESS_GET_BY_USER_ID}`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${sessionStorage.getItem("token")}`,
+          },
+          body: JSON.stringify({
+            userId: userId,
+          }),
+        },
+      );
+
+      const data = await res.json();
+
+      if (
+        res.ok &&
+        data.status &&
+        Array.isArray(data.data) &&
+        data.data.length > 0
+      ) {
+        setSelectedWorkerAddress(data.data[0]);
+      } else {
+        setSelectedWorkerAddress(null);
+      }
+    } catch (err) {
+      console.error("Address fetch error:", err);
+      setSelectedWorkerAddress(null);
+    }
+  };
 
   const handleOpenEditModal = async () => {
     await fetchStates();
@@ -189,7 +327,30 @@ const Dashboard2 = () => {
 
     setShowEditProfileModal(true);
   };
+  const fetchDesignations = async () => {
+    try {
+      const res = await fetch(
+        `${import.meta.env.VITE_API_BASE_URL}${import.meta.env.VITE_DESIGNATION_GET_ALL}`,
+        {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${sessionStorage.getItem("token")}`,
+          },
+        },
+      );
 
+      const data = await res.json();
+
+      if (!res.ok) {
+        notify(false, data.message || "Failed to fetch designations");
+        return;
+      }
+
+      setDesignations(data.data || []);
+    } catch (err) {
+      notify(false, "Server error");
+    }
+  };
   const handleSaveProfile = async () => {
     try {
       if (!editProfileData.state || !editProfileData.city) {
@@ -221,7 +382,7 @@ const Dashboard2 = () => {
         country: editProfileData.country,
       };
 
-      console.log("Sending Address Body 👉", bodyData);
+      console.log("Sending Address Body", bodyData);
 
       const res = await fetch(
         `${import.meta.env.VITE_API_BASE_URL}${import.meta.env.VITE_ADDRESS_INSERT_UPDATE_API}`,
@@ -324,6 +485,8 @@ const Dashboard2 = () => {
 
   const fetchDepartments = async () => {
     try {
+      setLoadingDepartments(true);
+
       const res = await fetch(
         `${import.meta.env.VITE_API_BASE_URL}${import.meta.env.VITE_DOCUMENT_DEPARTMENT_API}`,
         {
@@ -337,9 +500,14 @@ const Dashboard2 = () => {
       );
 
       const data = await res.json();
-      if (res.ok) setDepartments(data.data || []);
+
+      if (res.ok) {
+        setDepartments(data.data || []);
+      }
     } catch (err) {
       console.error("Department fetch failed", err);
+    } finally {
+      setLoadingDepartments(false);
     }
   };
   const handleCreateState = async () => {
@@ -376,10 +544,10 @@ const Dashboard2 = () => {
         return;
       }
 
-      alert("State created successfully");
+      notify(true, "State created successfully");
       setNewStateName("");
       setShowCreateStateModal(false);
-      fetchStates(); // 🔥 refresh table
+      fetchStates(); //  refresh table
     } catch (err) {
       console.error("Create state error:", err);
       alert("Server error while creating state");
@@ -575,8 +743,10 @@ const Dashboard2 = () => {
     }
   };
 
-  const fetchWorkers = async () => {
+  const fetchWorkers = async (page = 1) => {
     try {
+      setLoadingWorkers(true);
+
       const res = await fetch(
         `${import.meta.env.VITE_API_BASE_URL}${import.meta.env.VITE_GET_ALL_WORKERS_API}`,
         {
@@ -585,28 +755,38 @@ const Dashboard2 = () => {
             "Content-Type": "application/json",
             Authorization: `Bearer ${sessionStorage.getItem("token")}`,
           },
-          body: JSON.stringify({ roleId: 2 }),
+          body: JSON.stringify({
+            roleId: 2,
+            page: page,
+            limit: workersLimit,
+          }),
         },
       );
 
       const data = await res.json();
-      const list =
-        data.data?.workers ||
-        data.data ||
-        data.healthCareWorkers ||
-        data.workers ||
-        [];
 
-      if (res.ok) setWorkers(list);
+      if (res.ok && data.status) {
+        const workerList = data.data?.data || data.data || [];
+
+        setWorkers(workerList);
+
+        const totalCount =
+          data.data?.totalCount || data.totalCount || workerList.length;
+
+        setWorkersTotalCount(totalCount);
+        setWorkersTotalPages(Math.ceil(totalCount / workersLimit));
+      }
     } catch (err) {
       console.error("Fetch failed", err);
+    } finally {
+      setLoadingWorkers(false);
     }
   };
-
   const fetchWorkerDocuments = async (worker) => {
     try {
       setLoadingDocs(true);
       setSelectedWorker(worker);
+      fetchAddressByUserId(worker._id);
       setShowDocumentsPanel(true);
 
       const res = await fetch(
@@ -638,6 +818,8 @@ const Dashboard2 = () => {
   };
   const fetchWorkers2 = async () => {
     try {
+      setLoadingHealthcareWorkers(true);
+
       const res = await fetch(
         `${import.meta.env.VITE_API_BASE_URL}${import.meta.env.VITE_GET_ALL_WORKERS_API}`,
         {
@@ -664,11 +846,17 @@ const Dashboard2 = () => {
       }
     } catch (err) {
       console.error("Healthcare workers fetch failed", err);
+    } finally {
+      setLoadingHealthcareWorkers(false);
     }
   };
 
   const verifyHealthcareWorker = async (userId, status) => {
+    if (verifyingAction) return;
+
     try {
+      setVerifyingAction(status); // 👈 track which button clicked
+
       const res = await fetch(
         `${import.meta.env.VITE_API_BASE_URL}${import.meta.env.VITE_HEALTHCARE_WORKER_VERIFY_API}`,
         {
@@ -700,12 +888,14 @@ const Dashboard2 = () => {
           ),
         );
 
-        alert(`Worker ${status} successfully`);
+        notify(true, `Worker ${status} successfully`);
       } else {
-        alert(data.message || "Verification failed");
+        notify(false, data.message || "Verification failed");
       }
     } catch (err) {
-      console.error("Verification error:", err);
+      notify(false, "Something went wrong");
+    } finally {
+      setVerifyingAction(null); // 👈 reset
     }
   };
 
@@ -744,8 +934,17 @@ const Dashboard2 = () => {
     }
   };
 
-  const handleVerify = async (docId, status) => {
+  const handleVerify = async (
+    docId,
+    status,
+    reason = null,
+    documentName = "",
+  ) => {
+    if (processingDocId) return;
+
     try {
+      setProcessingDocId(docId);
+
       const res = await fetch(
         `${import.meta.env.VITE_API_BASE_URL}${import.meta.env.VITE_DOCUMENT_VERIFY_API}`,
         {
@@ -756,7 +955,11 @@ const Dashboard2 = () => {
           },
           body: JSON.stringify({
             id: docId,
-            verificationStatus: status, // Approved | Rejected
+            verificationStatus: status,
+            rejectionReason: reason,
+            email: selectedWorker?.email,
+            documentName: documentName,
+            facilityName: selectedWorker?.fullName,
           }),
         },
       );
@@ -764,18 +967,28 @@ const Dashboard2 = () => {
       const data = await res.json();
 
       if (res.ok) {
-        alert(`Document ${status}`);
-        fetchWorkerDocuments(selectedWorker);
+        notify(true, `Document ${status}`);
+
+        // 🔥 NO REFRESH
+        setWorkerDocuments((prevDocs) =>
+          prevDocs.map((doc) =>
+            doc._id === docId ? { ...doc, verificationStatus: status } : doc,
+          ),
+        );
       } else {
-        alert(data.message || "Verification failed");
+        notify(false, data.message || "Verification failed");
       }
     } catch (err) {
       console.error("Verify error", err);
+    } finally {
+      setProcessingDocId(null);
     }
   };
+  useEffect(() => {
+    fetchWorkers(workersPage);
+  }, [workersPage]);
 
   useEffect(() => {
-    fetchWorkers();
     fetchCurrentUser();
   }, []);
   useEffect(() => {
@@ -796,73 +1009,87 @@ const Dashboard2 = () => {
   return (
     <div className="h-screen flex bg-[#f3f3f3] overflow-hidden">
       <aside className="w-[260px] bg-[#4039AD] text-white flex flex-col h-screen fixed left-0 top-0">
-        <div className="px-5 pt-0 pb-1">
-          <img src="/logo.png" className="w-[170px]" />
+        <div className="-pt-3 px-6">
+          <img src="/logo.png" className="w-40" />
         </div>
 
-        <nav className="flex-1 flex flex-col justify-start gap-1 text-sm ">
+        <nav className="-mt-5 text-sm">
+          {/* Dashboard */}
           <div
             onClick={() => {
               setActiveTab("dashboard");
               fetchWorkers();
             }}
-            className="px-6 py-3 cursor-pointer hover:bg-white/10 flex items-center gap-2"
+            className="px-6 py-3 cursor-pointer hover:bg-white/10 flex items-center gap-3"
           >
             <MdDashboardCustomize className="text-lg" />
             <span>Dashboard</span>
           </div>
 
-          <div
-            onClick={() => navigate("/add-facility")}
-            className="px-6 py-3 cursor-pointer hover:bg-white/10"
-          >
-            Manage Facilities
-          </div>
-
+          {/* Departments */}
           <div
             onClick={() => {
               setActiveTab("departments");
               fetchDepartments();
             }}
-            className="px-6 py-3 cursor-pointer hover:bg-white/10"
+            className="px-6 py-3 cursor-pointer hover:bg-white/10 flex items-center gap-3"
           >
-            Departments
+            <Building2 size={18} />
+            <span>Departments</span>
           </div>
 
+          {/* Document Types */}
           <div
             onClick={() => {
               setActiveTab("documentTypes");
               fetchDocumentTypes();
             }}
-            className="px-6 py-3 cursor-pointer hover:bg-white/10"
+            className="px-6 py-3 cursor-pointer hover:bg-white/10 flex items-center gap-3"
           >
-            Document Types
+            <GrDocumentUser className="text-lg" />
+            <span>Document Types</span>
           </div>
 
+          {/* Healthcare Workers */}
           <div
             onClick={() => {
               setActiveTab("HealthcareWorkers");
               fetchWorkers2();
             }}
-            className="px-6 py-3 cursor-pointer hover:bg-white/10"
+            className="px-6 py-3 cursor-pointer hover:bg-white/10 flex items-center gap-3"
           >
-            Healthcare Workers
+            <GrUserWorker className="text-lg" />
+            <span>Healthcare Workers</span>
           </div>
 
+          {/* Locations */}
           <div
             onClick={() => {
               setActiveTab("Locations");
               fetchStates();
               fetchCities();
             }}
-            className="px-6 py-3 cursor-pointer hover:bg-white/10"
+            className="px-6 py-3 cursor-pointer hover:bg-white/10 flex items-center gap-3"
           >
-            Locations
+            <IoLocationOutline className="text-lg" />
+            <span>Locations</span>
+          </div>
+
+          {/* Designations */}
+          <div
+            onClick={() => {
+              setActiveTab("Designations");
+              fetchDesignations();
+            }}
+            className="px-6 py-3 cursor-pointer hover:bg-white/10 flex items-center gap-3"
+          >
+            <MdOutlineCastForEducation className="text-lg" />
+            <span>Designations</span>
           </div>
         </nav>
 
         {currentUser && (
-          <div className="mx-4 mb-6 bg-white/10 rounded-lg p-4 text-xs">
+          <div className="mx-4 mb-6 bg-white/10 rounded-lg p-4 text-xs mt-auto">
             <div className="font-semibold text-white truncate">
               {currentUser.fullName}
             </div>
@@ -917,18 +1144,61 @@ const Dashboard2 = () => {
               <div className="space-y-4">
                 {/* PRIMARY BUTTON */}
                 <button
-                  onClick={() => {
-                    sessionStorage.clear();
-                    notify(false, "Logged out successfully");
-                    setShowLogoutModal(false);
+                  onClick={async () => {
+                    if (isLoggingOut) return;
 
-                    setTimeout(() => {
-                      navigate("/login");
-                    }, 800);
+                    try {
+                      setIsLoggingOut(true);
+
+                      const token = sessionStorage.getItem("token");
+                      const fcmToken = sessionStorage.getItem("fcmToken");
+
+                      if (fcmToken && token) {
+                        await fetch(
+                          `${import.meta.env.VITE_API_BASE_URL}${import.meta.env.VITE_HEALTHCARE_WORKER_UPDATE_FCM_API}`,
+                          {
+                            method: "POST",
+                            headers: {
+                              "Content-Type": "application/json",
+                              Authorization: `Bearer ${token}`,
+                            },
+                            body: JSON.stringify({
+                              fcm: fcmToken,
+                              type: "Logout",
+                            }),
+                          },
+                        );
+                      }
+
+                      sessionStorage.clear();
+
+                      notify(true, "Logged out successfully");
+                      setShowLogoutModal(false);
+
+                      setTimeout(() => {
+                        navigate("/login");
+                      }, 800);
+                    } catch (err) {
+                      console.error("Logout FCM error:", err);
+                      notify(false, "Logout failed");
+                    } finally {
+                      setIsLoggingOut(false);
+                    }
                   }}
-                  className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-xl font-medium transition flex items-center justify-center gap-2"
+                  disabled={isLoggingOut}
+                  className={`w-full py-3 rounded-xl font-medium transition flex items-center justify-center gap-2
+    ${
+      isLoggingOut
+        ? "bg-gray-400 cursor-not-allowed text-white"
+        : "bg-blue-600 hover:bg-blue-700 text-white"
+    }
+  `}
                 >
-                  Log Out →
+                  {isLoggingOut && (
+                    <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                  )}
+
+                  {isLoggingOut ? "Logging out..." : "Log Out →"}
                 </button>
 
                 {/* SECONDARY BUTTON */}
@@ -981,84 +1251,112 @@ const Dashboard2 = () => {
                   </div>
 
                   <div className="flex-1 overflow-y-auto divide-y divide-slate-100">
-                    {currentWorkers.map((item) => (
-                      <div
-                        key={item._id}
-                        className="px-6 py-4 text-sm hover:bg-slate-50 transition"
-                        style={{
-                          display: "grid",
-                          gridTemplateColumns:
-                            "3fr 2fr 1.5fr 1.5fr 1.5fr 1.5fr 1.5fr",
-                        }}
-                      >
-                        <div className="flex items-center gap-3">
-                          <div
-                            className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold ${getAvatarColor(
-                              item.fullName,
-                            )}`}
-                          >
-                            {item.fullName?.slice(0, 2).toUpperCase()}
-                          </div>
-                          <span className="font-semibold text-slate-800 truncate max-w-[160px] block">
-                            {item.fullName}
-                          </span>
-                        </div>
-                        <div className="text-slate-600 text-sm">
-                          <span className="font-semibold font-sans text-slate-800 truncate max-w-[160px] block">
-                            {item.email}
-                          </span>
-                        </div>
-                        <div className="text-slate-600 text-sm">
-                          {item.mobileNumber}
-                        </div>
-                        <div>
-                          <span
-                            className={`px-2.5 py-1 rounded-full text-[11px] font-bold ${
-                              item.verificationStatus === "Verified"
-                                ? "bg-green-100 text-green-700"
-                                : item.verificationStatus === "Rejected"
-                                  ? "bg-red-100 text-red-700"
-                                  : "bg-yellow-100 text-yellow-700"
-                            }`}
-                          >
-                            {item.verificationStatus || "Pending"}
-                          </span>
-                        </div>
-                        <div className="text-slate-600 text-sm">
-                          {formatDate(item.createdAt)}
-                        </div>
-                        <div className="text-slate-600 text-sm">
-                          {formatDate(item.updatedAt)}
-                        </div>
-                        <div className="text-center">
-                          <button
-                            onClick={() => fetchWorkerDocuments(item)} // ← your original function
-                            className="inline-flex items-center justify-center gap-1 px-4 py-1.5 
-                     border border-slate-200 rounded text-xs font-semibold 
-                     hover:bg-slate-50 transition"
-                          >
-                            <FaEye className="text-sm" />
-                            <span>View</span>
-                          </button>
-                        </div>
+                    {loadingWorkers ? (
+                      /* 🔥 LOADER SECTION */
+                      <div className="flex items-center justify-center py-24">
+                        <AdvancedPeopleLoader />
                       </div>
-                    ))}
+                    ) : workers.length === 0 ? (
+                      /* 🔥 EMPTY STATE */
+                      <div className="py-16 text-center text-slate-500 font-medium">
+                        No workers found
+                      </div>
+                    ) : (
+                      /* 🔥 TABLE DATA */
+                      workers.map((item) => (
+                        <div
+                          key={item._id}
+                          className="px-6 py-4 text-sm hover:bg-slate-50 transition"
+                          style={{
+                            display: "grid",
+                            gridTemplateColumns:
+                              "3fr 2fr 1.5fr 1.5fr 1.5fr 1.5fr 1.5fr",
+                          }}
+                        >
+                          {/* Name */}
+                          <div className="flex items-center gap-3">
+                            {/* Avatar */}
+                            <div className="w-9 h-9 rounded-full overflow-hidden flex-shrink-0">
+                              {item.imageUrl ? (
+                                <img
+                                  src={`${import.meta.env.VITE_API_BASE_URL}/uploads/${item.imageUrl}`}
+                                  alt={item.fullName}
+                                  className="w-full h-full object-cover"
+                                />
+                              ) : (
+                                <div
+                                  className={`w-full h-full flex items-center justify-center text-xs font-bold ${getAvatarColor(
+                                    item.fullName,
+                                  )}`}
+                                >
+                                  {item.fullName?.slice(0, 2).toUpperCase()}
+                                </div>
+                              )}
+                            </div>
 
-                    {currentWorkers.length === 0 && workers.length > 0 && (
-                      <div className="py-8 text-center text-slate-500">
-                        No workers on this page
-                      </div>
+                            {/* Name */}
+                            <span className="font-semibold text-slate-800 truncate max-w-[200px]">
+                              {item.fullName}
+                            </span>
+                          </div>
+
+                          {/* Email */}
+                          <div className="text-slate-600 text-sm">
+                            <span className="font-semibold font-sans text-slate-800 truncate max-w-[160px] block">
+                              {item.email}
+                            </span>
+                          </div>
+
+                          {/* Mobile */}
+                          <div className="text-slate-600 text-sm">
+                            {item.mobileNumber}
+                          </div>
+
+                          {/* Status */}
+                          <div>
+                            <span
+                              className={`px-2.5 py-1 rounded-full text-[11px] font-bold ${getStatusColor(
+                                item.verificationStatus,
+                              )}`}
+                            >
+                              {item.verificationStatus || "Pending"}
+                            </span>
+                          </div>
+
+                          {/* Created */}
+                          <div className="text-slate-600 text-sm">
+                            {formatDate(item.createdAt)}
+                          </div>
+
+                          {/* Updated */}
+                          <div className="text-slate-600 text-sm">
+                            {formatDate(item.updatedAt)}
+                          </div>
+
+                          {/* Action */}
+                          <div className="text-center">
+                            <button
+                              onClick={() => fetchWorkerDocuments(item)}
+                              className="inline-flex items-center justify-center gap-1 px-4 py-1.5 
+                       border border-slate-200 rounded text-xs font-semibold 
+                       hover:bg-slate-50 transition"
+                            >
+                              <FaEye className="text-sm" />
+                              <span>View</span>
+                            </button>
+                          </div>
+                        </div>
+                      ))
                     )}
                   </div>
 
                   <div className="px-6 py-3 border-t border-slate-100 text-sm text-slate-500 shrink-0 flex items-center justify-between">
                     <div>
-                      Showing{" "}
-                      {currentWorkers.length === 0
+                      {workersTotalCount === 0
                         ? 0
-                        : workersIndexOfFirst + 1}
-                      –{Math.min(workersIndexOfLast, workers.length)}
-                      of {workers.length} entries
+                        : (workersPage - 1) * workersLimit + 1}
+                      –{Math.min(workersPage * workersLimit, workersTotalCount)}
+                      of {workersTotalCount}
                     </div>
 
                     <div className="flex items-center gap-3">
@@ -1095,31 +1393,86 @@ const Dashboard2 = () => {
               <div className="col-span-5">
                 {showDocumentsPanel && (
                   <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center">
-                    <div className="bg-white rounded-xl p-6 shadow-lg w-[900px] max-h-[85vh] overflow-y-auto relative">
-                      <button
-                        onClick={() => setShowDocumentsPanel(false)}
-                        className="absolute top-3 right-3 text-sm border px-3 py-1 rounded hover:bg-gray-100"
-                      >
-                        ✕ Close
-                      </button>
+                    <div className="bg-white rounded-xl shadow-lg w-[900px] max-h-[85vh] flex flex-col relative">
+                      <div className="p-6 border-b flex-shrink-0">
+                        <div className="flex items-start justify-between">
+                          <div>
+                            <h3 className="font-semibold text-base">
+                              Uploaded Documents:
+                            </h3>
 
-                      {/* TITLE */}
-                      <h3 className="font-semibold mb-4 px-2 text-left">
-                        Uploaded Documents: <br></br>
-                        <span className="text-[#4039AD]">
-                          {selectedWorker?.fullName}
-                        </span>{" "}
-                        <br></br>
-                        <span className="text-[#4039AD]">
-                          {selectedWorker?.email}
-                        </span>
-                        /
-                        <span className="text-[#4039AD]">
-                          {selectedWorker?.mobileNumber}
-                        </span>
-                      </h3>
+                            <p className="text-[#4039AD] font-medium mt-1">
+                              {selectedWorker?.fullName}
+                            </p>
 
-                      <div className="grid grid-cols-6 text-xs px-0 text-gray-500 mb-2 text-center">
+                            <p className="text-sm text-[#4039AD]">
+                              {selectedWorkerAddress
+                                ? `${selectedWorkerAddress.addressLine1 || ""}, 
+               ${selectedWorkerAddress.addressLine2 || ""}, 
+               ${selectedWorkerAddress.country || ""} - 
+               ${selectedWorkerAddress.postalCode || ""}`
+                                : "No Address Found"}
+                            </p>
+                          </div>
+
+                          <div className="flex items-center gap-3">
+                            <button
+                              onClick={() =>
+                                verifyHealthcareWorker(
+                                  selectedWorker?._id,
+                                  "Verified",
+                                )
+                              }
+                              disabled={verifyingAction !== null}
+                              className={`px-5 py-2 rounded-lg text-sm text-white flex items-center gap-2
+    ${
+      verifyingAction === "Verified"
+        ? "bg-gray-400 cursor-not-allowed"
+        : "bg-green-500 hover:bg-green-600"
+    }
+  `}
+                            >
+                              {verifyingAction === "Verified" && (
+                                <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                              )}
+                              {verifyingAction === "Verified"
+                                ? "Processing..."
+                                : "Approve"}
+                            </button>
+                            <button
+                              onClick={() =>
+                                verifyHealthcareWorker(
+                                  selectedWorker?._id,
+                                  "Rejected",
+                                )
+                              }
+                              disabled={verifyingAction !== null}
+                              className={`px-5 py-2 rounded-lg text-sm text-white flex items-center gap-2
+    ${
+      verifyingAction === "Rejected"
+        ? "bg-gray-400 cursor-not-allowed"
+        : "bg-red-500 hover:bg-red-600"
+    }
+  `}
+                            >
+                              {verifyingAction === "Rejected" && (
+                                <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                              )}
+                              {verifyingAction === "Rejected"
+                                ? "Processing..."
+                                : "Reject"}
+                            </button>
+                            <button
+                              onClick={() => setShowDocumentsPanel(false)}
+                              className="text-sm border px-3 py-2 rounded-lg hover:bg-gray-100"
+                            >
+                              ✕ Close
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-6 text-xs px-6 py-3 text-gray-500 border-b bg-gray-50 text-center flex-shrink-0">
                         <div>Document</div>
                         <div>Status</div>
                         <div>Expiry</div>
@@ -1128,74 +1481,97 @@ const Dashboard2 = () => {
                         <div>Verify</div>
                       </div>
 
-                      {loadingDocs ? (
-                        <p className="text-sm text-gray-500">Loading...</p>
-                      ) : workerDocuments.length === 0 ? (
-                        <p className="text-sm text-gray-500">
-                          No documents found
-                        </p>
-                      ) : (
-                        workerDocuments.map((doc) => {
-                          const fileUrl = `${import.meta.env.VITE_API_BASE_URL}/uploads/${doc.documentUrl}`;
+                      <div className="flex-1 overflow-y-auto p-6">
+                        {loadingDocs ? (
+                          <p className="text-sm text-gray-500">Loading...</p>
+                        ) : workerDocuments.length === 0 ? (
+                          <p className="text-sm text-gray-500">
+                            No documents found
+                          </p>
+                        ) : (
+                          workerDocuments.map((doc) => {
+                            const fileUrl = `${import.meta.env.VITE_API_BASE_URL}/uploads/${doc.documentUrl}`;
 
-                          return (
-                            <div
-                              key={doc._id}
-                              className="grid grid-cols-6 items-center border rounded-lg px-3 py-3 text-sm mb-2"
-                            >
-                              <div>{doc.documentName}</div>
-
-                              <span className="bg-green-100 text-green-700 text-xs px-9 py-1 rounded-full">
-                                Submitted
-                              </span>
-
-                              <div className="text-center">
-                                {formatDate(doc.expiryDate)}
-                              </div>
-
-                              <span
-                                className={`text-xs px-9 py-1 rounded-full ${
-                                  doc.verificationStatus === "Verified"
-                                    ? "bg-green-100 text-green-700"
-                                    : doc.verificationStatus === "Rejected"
-                                      ? "bg-red-100 text-red-700"
-                                      : "bg-yellow-100 text-yellow-700"
-                                }`}
+                            return (
+                              <div
+                                key={doc._id}
+                                className="grid grid-cols-6 items-center border rounded-lg px-3 py-3 text-sm mb-3"
                               >
-                                {doc.verificationStatus || "Pending"}
-                              </span>
+                                <div>{doc.documentName}</div>
 
-                              <a
-                                href={fileUrl}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="text-[#4039AD] underline text-xs text-center"
-                              >
-                                View
-                              </a>
+                                <span className="bg-green-100 text-green-700 text-xs px-4 py-1 rounded-full text-center">
+                                  Submitted
+                                </span>
 
-                              <div className="flex gap-2">
-                                <button
-                                  onClick={() =>
-                                    handleVerify(doc._id, "Approved")
-                                  }
-                                  className="bg-green-500 text-white text-xs px-1 py-1 rounded"
+                                <div className="text-center">
+                                  {formatDate(doc.expiryDate)}
+                                </div>
+
+                                <span
+                                  className={`text-xs px-4 py-1 rounded-full text-center ${getStatusColor(doc.verificationStatus)}`}
                                 >
-                                  Approve
-                                </button>
-                                <button
-                                  onClick={() =>
-                                    handleVerify(doc._id, "Rejected")
-                                  }
-                                  className="bg-red-500 text-white text-xs px-2 py-1 rounded"
+                                  {doc.verificationStatus || "Pending"}
+                                </span>
+
+                                <a
+                                  href={fileUrl}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="text-[#4039AD] underline text-xs text-center"
                                 >
-                                  Reject
-                                </button>
+                                  View
+                                </a>
+
+                                <div className="flex gap-2 justify-center">
+                                  <button
+                                    onClick={() =>
+                                      handleVerify(
+                                        doc._id,
+                                        "Approved",
+                                        null,
+                                        doc.documentName,
+                                      )
+                                    }
+                                    disabled={processingDocId === doc._id}
+                                    className={`text-white text-xs px-2 py-1 rounded flex items-center gap-1
+    ${
+      processingDocId === doc._id
+        ? "bg-gray-400 cursor-not-allowed"
+        : "bg-green-500 hover:bg-green-600"
+    }
+  `}
+                                  >
+                                    {processingDocId === doc._id && (
+                                      <span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                                    )}
+                                    {processingDocId === doc._id
+                                      ? "Processing..."
+                                      : "Approve"}
+                                  </button>
+                                  <button
+                                    onClick={() => {
+                                      setSelectedDocId(doc._id);
+                                      setSelectedDocName(doc.documentName);
+                                      setRejectReason("");
+                                      setShowRejectModal(true);
+                                    }}
+                                    disabled={processingDocId === doc._id}
+                                    className={`text-white text-xs px-2 py-1 rounded
+    ${
+      processingDocId === doc._id
+        ? "bg-gray-400 cursor-not-allowed"
+        : "bg-red-500 hover:bg-red-600"
+    }
+  `}
+                                  >
+                                    Reject
+                                  </button>
+                                </div>
                               </div>
-                            </div>
-                          );
-                        })
-                      )}
+                            );
+                          })
+                        )}
+                      </div>
                     </div>
                   </div>
                 )}
@@ -1232,70 +1608,93 @@ const Dashboard2 = () => {
                   </div>
 
                   <div className="flex-1 overflow-y-auto divide-y divide-slate-100">
-                    {currentHealthcareWorkers.map((item) => (
-                      <div
-                        key={item._id}
-                        className="px-6 py-4 text-sm hover:bg-slate-50 transition"
-                        style={{
-                          display: "grid",
-                          gridTemplateColumns:
-                            "3fr 2fr 1.5fr 1.5fr 1.5fr 1.5fr 1.5fr",
-                        }}
-                      >
-                        {/* FULL NAME + AVATAR */}
-                        <div className="flex items-center gap-3">
-                          <div
-                            className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold ${getAvatarColor(
-                              item.fullName,
-                            )}`}
-                          >
-                            {item.fullName?.slice(0, 2).toUpperCase()}
-                          </div>
-                          <span className="font-semibold text-slate-800 truncate max-w-[160px] block">
-                            {item.fullName}
-                          </span>
-                        </div>
-                        <div className="text-slate-600 text-sm">
-                          <span className="font-semibold font-sans text-slate-800 truncate max-w-[160px] block">
-                            {item.email}
-                          </span>
-                        </div>
-                        <div className="text-slate-600 text-sm">
-                          {item.mobileNumber}
-                        </div>
-                        <div>
-                          <span
-                            className={`px-2.5 py-1 rounded-full text-[11px] font-bold ${
-                              item.verificationStatus === "Verified"
-                                ? "bg-green-100 text-green-700"
-                                : item.verificationStatus === "Rejected"
-                                  ? "bg-red-100 text-red-700"
-                                  : "bg-yellow-100 text-yellow-700"
-                            }`}
-                          >
-                            {item.verificationStatus || "Pending"}
-                          </span>
-                        </div>
-                        <div className="text-slate-600 text-sm">
-                          {formatDate(item.createdAt)}
-                        </div>
-                        <div className="text-slate-600 text-sm">
-                          {formatDate(item.updatedAt)}
-                        </div>
-                        {/* ACTION */}
-                        <div className="text-center">
-                          <button
-                            onClick={() => fetchHealthcareWorkerById(item)}
-                            className="inline-flex items-center justify-center gap-1 px-4 py-1.5 
-                       border border-slate-200 rounded text-xs font-semibold 
-                       hover:bg-slate-50 transition"
-                          >
-                            <FaEye className="text-sm" />
-                            <span>View</span>
-                          </button>
-                        </div>
+                    {loadingHealthcareWorkers ? (
+                      <div className="flex items-center justify-center py-24">
+                        <AdvancedPeopleLoader />
                       </div>
-                    ))}
+                    ) : currentHealthcareWorkers.length === 0 ? (
+                      <div className="py-16 text-center text-slate-500 font-medium">
+                        No healthcare workers found
+                      </div>
+                    ) : (
+                      currentHealthcareWorkers.map((item) => (
+                        <div
+                          key={item._id}
+                          className="px-6 py-4 text-sm hover:bg-slate-50 transition"
+                          style={{
+                            display: "grid",
+                            gridTemplateColumns:
+                              "3fr 2fr 1.5fr 1.5fr 1.5fr 1.5fr 1.5fr",
+                          }}
+                        >
+                          <div className="flex items-center gap-3">
+                            {/* Avatar */}
+                            <div className="w-9 h-9 rounded-full overflow-hidden flex-shrink-0">
+                              {item.imageUrl ? (
+                                <img
+                                  src={`${import.meta.env.VITE_API_BASE_URL}/uploads/${item.imageUrl}`}
+                                  alt={item.fullName}
+                                  className="w-full h-full object-cover"
+                                />
+                              ) : (
+                                <div
+                                  className={`w-full h-full flex items-center justify-center text-xs font-bold ${getAvatarColor(
+                                    item.fullName,
+                                  )}`}
+                                >
+                                  {item.fullName?.slice(0, 2).toUpperCase()}
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Name */}
+                            <span className="font-semibold text-slate-800 truncate max-w-[200px]">
+                              {item.fullName}
+                            </span>
+                          </div>
+
+                          <div className="text-slate-600 text-sm">
+                            <span className="font-semibold font-sans text-slate-800 truncate max-w-[160px] block">
+                              {item.email}
+                            </span>
+                          </div>
+
+                          <div className="text-slate-600 text-sm">
+                            {item.mobileNumber}
+                          </div>
+
+                          <div>
+                            <span
+                              className={`px-3 py-1 rounded-full text-xs font-semibold ${getStatusColor(
+                                item.verificationStatus,
+                              )}`}
+                            >
+                              {item.verificationStatus || "Pending"}
+                            </span>
+                          </div>
+
+                          <div className="text-slate-600 text-sm">
+                            {formatDate(item.createdAt)}
+                          </div>
+
+                          <div className="text-slate-600 text-sm">
+                            {formatDate(item.updatedAt)}
+                          </div>
+
+                          <div className="text-center">
+                            <button
+                              onClick={() => fetchHealthcareWorkerById(item)}
+                              className="inline-flex items-center justify-center gap-1 px-4 py-1.5 
+              border border-slate-200 rounded text-xs font-semibold 
+              hover:bg-slate-50 transition"
+                            >
+                              <FaEye className="text-sm" />
+                              <span>View</span>
+                            </button>
+                          </div>
+                        </div>
+                      ))
+                    )}
                   </div>
 
                   <div className="px-6 py-3 border-t border-slate-100 text-sm text-slate-500 shrink-0 flex items-center justify-between">
@@ -1346,7 +1745,7 @@ const Dashboard2 = () => {
                           <img
                             src={
                               workerProfile?.imageUrl
-                                ? `http://192.168.0.76:3000/uploads/${workerProfile.imageUrl}`
+                                ? `http://192.168.0.159:3000/uploads/${workerProfile.imageUrl}`
                                 : "https://via.placeholder.com/150"
                             }
                             alt="Profile"
@@ -1360,15 +1759,7 @@ const Dashboard2 = () => {
                               </h3>
 
                               <span
-                                className={`px-3 py-1 rounded-full text-xs font-semibold ${
-                                  workerProfile?.verificationStatus ===
-                                  "Verified"
-                                    ? "bg-green-100 text-green-700"
-                                    : workerProfile?.verificationStatus ===
-                                        "Rejected"
-                                      ? "bg-red-100 text-red-700"
-                                      : "bg-yellow-100 text-yellow-700"
-                                }`}
+                                className={`px-3 py-1 rounded-full text-xs font-semibold ${getStatusColor(workerProfile?.verificationStatus)}`}
                               >
                                 {workerProfile?.verificationStatus || "Pending"}
                               </span>
@@ -1383,28 +1774,42 @@ const Dashboard2 = () => {
                         <div className="flex items-center gap-4">
                           {/* APPROVE BUTTON */}
                           <button
-                            onClick={() =>
-                              verifyHealthcareWorker(
-                                workerProfile._id,
-                                "Verified",
-                              )
-                            }
-                            className="bg-green-500 hover:bg-green-600 text-white px-4 py-1.5 rounded-lg text-sm transition"
-                          >
-                            Approve
-                          </button>
+  onClick={() =>
+    verifyHealthcareWorker(workerProfile._id, "Verified")
+  }
+  disabled={verifyingAction !== null}
+  className={`px-4 py-1.5 rounded-lg text-sm text-white flex items-center gap-2
+    ${
+      verifyingAction === "Verified"
+        ? "bg-gray-400 cursor-not-allowed"
+        : "bg-green-500 hover:bg-green-600"
+    }
+  `}
+>
+  {verifyingAction === "Verified" && (
+    <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+  )}
+  {verifyingAction === "Verified" ? "Processing..." : "Approve"}
+</button>
 
-                          <button
-                            onClick={() =>
-                              verifyHealthcareWorker(
-                                workerProfile._id,
-                                "Rejected",
-                              )
-                            }
-                            className="bg-red-500 hover:bg-red-600 text-white px-4 py-1.5 rounded-lg text-sm transition"
-                          >
-                            Reject
-                          </button>
+                         <button
+  onClick={() =>
+    verifyHealthcareWorker(workerProfile._id, "Rejected")
+  }
+  disabled={verifyingAction !== null}
+  className={`px-4 py-1.5 rounded-lg text-sm text-white flex items-center gap-2
+    ${
+      verifyingAction === "Rejected"
+        ? "bg-gray-400 cursor-not-allowed"
+        : "bg-red-500 hover:bg-red-600"
+    }
+  `}
+>
+  {verifyingAction === "Rejected" && (
+    <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+  )}
+  {verifyingAction === "Rejected" ? "Processing..." : "Reject"}
+</button>
 
                           <button
                             onClick={() => {
@@ -1447,9 +1852,9 @@ const Dashboard2 = () => {
                       {/* CONTENT */}
                       <div className="p-6">
                         {loadingDocs ? (
-                          <p className="text-center text-sm text-gray-500">
-                            Loading...
-                          </p>
+                          <div className="flex items-center justify-center py-16">
+                            <AdvancedPeopleLoader />
+                          </div>
                         ) : !workerProfile ? (
                           <p className="text-center text-sm text-gray-500">
                             No data found
@@ -1940,9 +2345,14 @@ const Dashboard2 = () => {
                                         <div>
                                           <button
                                             onClick={() =>
-                                              handleVerify(doc._id, "Approved")
+                                              handleVerify(
+                                                doc._id,
+                                                "Approved",
+                                                null,
+                                                doc.documentName,
+                                              )
                                             }
-                                            className="bg-green-500 text-white text-xs px-3 py-1 rounded"
+                                            className="bg-green-500 text-white text-xs px-2 py-1 rounded"
                                           >
                                             Approve
                                           </button>
@@ -1951,10 +2361,16 @@ const Dashboard2 = () => {
                                         {/* Reject */}
                                         <div>
                                           <button
-                                            onClick={() =>
-                                              handleVerify(doc._id, "Rejected")
-                                            }
-                                            className="bg-red-500 text-white text-xs px-3 py-1 rounded"
+                                            onClick={() => {
+                                              setSelectedDocId(doc._id);
+                                              setSelectedDocName(
+                                                doc.documentName,
+                                              ); // ✅ add this
+
+                                              setRejectReason("");
+                                              setShowRejectModal(true);
+                                            }}
+                                            className="bg-red-500 text-white text-xs px-2 py-1 rounded"
                                           >
                                             Reject
                                           </button>
@@ -1974,6 +2390,89 @@ const Dashboard2 = () => {
               </div>
             </div>
           </>
+        )}
+        {activeTab === "Designations" && (
+          <div className="bg-white p-6 rounded-xl shadow-sm">
+            {/* Header */}
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-lg font-semibold">Designations List</h2>
+
+              <button
+                onClick={() => setShowAddDesignation(true)}
+                className="bg-[#4039AD] text-white px-4 py-2 rounded-lg text-sm"
+              >
+                + Add Designation
+              </button>
+            </div>
+
+            {/* Table */}
+            <div className="border rounded-xl flex flex-col h-[400px]">
+              {/* FIXED HEADER */}
+              <div className="bg-gray-50 border-b">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-xs uppercase text-gray-600">
+                      <th className="px-6 py-3 text-left w-[80px]">S.No</th>
+                      <th className="px-6 py-3 text-left">Designation Name</th>
+                      <th className="px-6 py-3 text-left">Created Date</th>
+                      <th className="px-6 py-3 text-left w-[120px]">Status</th>
+                      <th className="px-6 py-3 text-left w-[120px]">Action</th>
+                    </tr>
+                  </thead>
+                </table>
+              </div>
+
+              {/* SCROLLABLE BODY */}
+              <div className="flex-1 overflow-y-auto">
+                <table className="w-full text-sm">
+                  <tbody className="divide-y">
+                    {designations.length === 0 ? (
+                      <tr>
+                        <td
+                          colSpan="4"
+                          className="px-6 py-6 text-center text-gray-400"
+                        >
+                          No designations found
+                        </td>
+                      </tr>
+                    ) : (
+                      designations.map((item, index) => (
+                        <tr key={item._id} className="hover:bg-gray-50">
+                          <td className="px-6 py-4 w-[80px]">{index + 1}</td>
+                          <td className="px-6 py-4 font-medium">
+                            {item.designationName}
+                          </td>
+                          <td className="px-12 py-4">
+                            {new Date(item.createdAt).toLocaleDateString()}
+                          </td>
+                          <td className="px-6 py-4 w-[120px]">
+                            <span
+                              className={`px-6 py-1 rounded-full text-xs ${getStatusColor(item.status)}`}
+                            >
+                              {item.status}
+                            </span>
+                          </td>
+                          <td className="px-12 py-4 w-[120px]">
+                            <button
+                              onClick={() => {
+                                setEditingDesignationId(item._id);
+                                setNewDesignation(item.designationName);
+                                setDesignationStatus(item.status);
+                                setShowAddDesignation(true);
+                              }}
+                              className="text-blue-600 text-sm hover:underline"
+                            >
+                              Edit
+                            </button>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
         )}
 
         {activeTab === "departments" && (
@@ -2070,40 +2569,59 @@ const Dashboard2 = () => {
               <div className="flex-1 overflow-y-auto">
                 <table className="w-full text-sm table-fixed">
                   <tbody className="divide-y divide-gray-100">
-                    {currentDepartments.map((dept) => (
-                      <tr
-                        key={dept._id}
-                        className="hover:bg-gray-50 align-middle"
-                      >
-                        {/* Department Name */}
-                        <td className="w-1/3 px-6 py-3 text-gray-800">
-                          {dept.departmentName}
-                        </td>
-
-                        {/* Created */}
-                        <td className="w-1/6 px-8 py-3 text-gray-600">
-                          {new Date(dept.createdAt).toLocaleDateString()}
-                        </td>
-
-                        {/* Updated */}
-                        <td className="w-1/6 px-8 py-3 text-gray-600">
-                          {new Date(dept.updatedAt).toLocaleDateString()}
-                        </td>
-
-                        {/* Status */}
-                        <td className="w-1/6 px-6 py-3">
-                          <span
-                            className={`px-4 py-1 rounded-full text-xs font-medium ${
-                              dept.isActive
-                                ? "bg-green-100 text-green-700"
-                                : "bg-red-100 text-red-700"
-                            }`}
-                          >
-                            {dept.isActive ? "Active" : "Inactive"}
-                          </span>
+                    {loadingDepartments ? (
+                      <tr>
+                        <td colSpan="4">
+                          <div className="flex items-center justify-center py-16">
+                            <AdvancedPeopleLoader />
+                          </div>
                         </td>
                       </tr>
-                    ))}
+                    ) : currentDepartments.length === 0 ? (
+                      <tr>
+                        <td
+                          colSpan="4"
+                          className="text-center py-10 text-gray-400 font-medium"
+                        >
+                          No departments found
+                        </td>
+                      </tr>
+                    ) : (
+                      currentDepartments.map((dept) => (
+                        <tr
+                          key={dept._id}
+                          className="hover:bg-gray-50 align-middle transition"
+                        >
+                          {/* Department Name */}
+                          <td className="w-1/3 px-6 py-3 text-gray-800 font-medium">
+                            {dept.departmentName}
+                          </td>
+
+                          {/* Created */}
+                          <td className="w-1/6 px-8 py-3 text-gray-600">
+                            {new Date(dept.createdAt).toLocaleDateString()}
+                          </td>
+
+                          {/* Updated */}
+                          <td className="w-1/6 px-8 py-3 text-gray-600">
+                            {new Date(dept.updatedAt).toLocaleDateString()}
+                          </td>
+
+                          {/* Status */}
+                          <td className="w-1/6 px-6 py-3">
+                            <span
+                              className={`px-4 py-1 rounded-full text-xs font-semibold ${
+                                dept.isActive
+                                  ? "bg-green-100 text-green-700"
+                                  : "bg-red-100 text-red-700"
+                              }`}
+                            >
+                              {dept.isActive ? "Active" : "Inactive"}
+                            </span>
+                          </td>
+                        </tr>
+                      ))
+                    )}
                   </tbody>
                 </table>
               </div>
@@ -2131,7 +2649,6 @@ const Dashboard2 = () => {
 
                   <span className="text-xs font-medium">
                     Page {departmentsPage} of {departmentsTotalPages || 1}{" "}
-                    {/* also fixed totalPages → departmentsTotalPages */}
                   </span>
 
                   <button
@@ -2343,6 +2860,127 @@ const Dashboard2 = () => {
             </div>
           </div>
         )}
+        {showAddDesignation && (
+          <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+            <div className="bg-white w-[420px] rounded-xl p-6 shadow-xl">
+              <h3 className="text-lg font-semibold mb-4">
+                {editingDesignationId ? "Edit Designation" : "Add Designation"}
+              </h3>
+
+              <div className="mb-4">
+                <label className="text-sm text-gray-600 block mb-1">
+                  Designation Name
+                </label>
+                <input
+                  type="text"
+                  placeholder="Enter designation name"
+                  value={newDesignation}
+                  onChange={(e) => setNewDesignation(e.target.value)}
+                  className="border w-full px-3 py-2 rounded-lg"
+                />
+              </div>
+
+              <div className="mb-6">
+                <label className="text-sm text-gray-600 block mb-1">
+                  Status
+                </label>
+                <select
+                  value={designationStatus}
+                  onChange={(e) => setDesignationStatus(e.target.value)}
+                  className="border w-full px-3 py-2 rounded-lg"
+                >
+                  <option value="Active">Active</option>
+                  <option value="Inactive">Inactive</option>
+                </select>
+              </div>
+
+              <div className="flex justify-end gap-3">
+                <button
+                  onClick={() => {
+                    setShowAddDesignation(false);
+                    setEditingDesignationId(null);
+                    setNewDesignation("");
+                    setDesignationStatus("Active");
+                  }}
+                  className="px-4 py-2 border rounded-lg text-sm"
+                >
+                  Cancel
+                </button>
+
+                <button
+                  onClick={handleSaveDesignation}
+                  className="px-4 py-2 bg-[#4039AD] text-white rounded-lg text-sm"
+                >
+                  {editingDesignationId ? "Update" : "Save"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+        {showRejectModal && (
+          <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+            <div className="bg-white w-[420px] rounded-xl p-6 shadow-xl">
+              <h3 className="text-lg font-semibold mb-4 text-red-600">
+                Reject Document
+              </h3>
+
+              <label className="text-sm text-gray-600 block mb-2">
+                Enter Rejection Reason
+              </label>
+
+              <textarea
+                value={rejectReason}
+                onChange={(e) => setRejectReason(e.target.value)}
+                rows={4}
+                className="border w-full px-3 py-2 rounded-lg mb-4"
+                placeholder="Type rejection reason here..."
+              />
+
+              <div className="flex justify-end gap-3">
+                <button
+                  onClick={() => setShowRejectModal(false)}
+                  className="px-4 py-2 border rounded-lg text-sm"
+                >
+                  Cancel
+                </button>
+
+                <button
+                  onClick={async () => {
+                    if (!rejectReason.trim()) {
+                      notify(false, "Please enter rejection reason");
+                      return;
+                    }
+
+                    setIsRejecting(true);
+
+                    await handleVerify(
+                      selectedDocId,
+                      "Rejected",
+                      rejectReason,
+                      selectedDocName,
+                    );
+
+                    setIsRejecting(false);
+                    setShowRejectModal(false);
+                  }}
+                  disabled={isRejecting}
+                  className={`px-4 py-2 rounded-lg text-white text-sm flex items-center gap-2
+            ${
+              isRejecting
+                ? "bg-gray-400 cursor-not-allowed"
+                : "bg-red-600 hover:bg-red-700"
+            }
+          `}
+                >
+                  {isRejecting && (
+                    <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                  )}
+                  {isRejecting ? "Rejecting..." : "Submit & Reject"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {showEditProfileModal && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
@@ -2352,7 +2990,7 @@ const Dashboard2 = () => {
                 <img
                   src={
                     currentUser?.imageUrl
-                      ? `http://192.168.0.76:3000/uploads/${currentUser.imageUrl}`
+                      ? `http://192.168.0.53:3000/uploads/${currentUser.imageUrl}`
                       : "https://i.pravatar.cc/100"
                   }
                   alt="Profile"

@@ -2,26 +2,25 @@ import "react-toastify/dist/ReactToastify.css";
  
 import { toast, Zoom } from "react-toastify";
  
-export const baseUrl="http://192.168.0.76:3000/api"
-
-export const urls={
-  healthCareWorker:  {
-        login:"healthCareWorker/login",
-       signup :"healthCareWorker/signup"
-    },
-    documentType:{
-        getAll:"documentType/getAll"
-    },
-    shift:{
-        create:"shift/create",
-        getAll:"shift/getAll"
-    },
-    document:{
-        upload:"document/upload",
-        getAll:"document/getAll",
-        verify:"document/verify",
-    }
-}
+export const baseUrl = import.meta.env.VITE_API_BASE_URL;
+export const urls = {
+  healthCareWorker: {
+    login: "api/healthCareWorker/login",
+    signup: "api/healthCareWorker/signup",
+  },
+  documentType: {
+    getAll: "api/documentType/getAll",
+  },
+  shift: {
+    create: "api/shift/create",
+    getAll: "api/shift/getAll",
+  },
+  document: {
+    upload: "api/document/upload",
+    getAll: "api/document/getAll",
+    verify: "api/document/verify",
+  },
+};
 export const notify = (status, msg) => {
   const toastOptions = {
     position: "top-center", // Set the position to bottom-right
