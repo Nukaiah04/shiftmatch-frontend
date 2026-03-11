@@ -92,6 +92,8 @@ const Dashboard2 = () => {
   const [loadingDepartments, setLoadingDepartments] = useState(false);
   const [verifyingAction, setVerifyingAction] = useState(null);
   const [processingDocId, setProcessingDocId] = useState(null);
+  const [processingApproveId, setProcessingApproveId] = useState(null);
+  const [processingRejectId, setProcessingRejectId] = useState(null);
 
   // Workers Pagination
   const [workersPage, setWorkersPage] = useState(1);
@@ -237,7 +239,7 @@ const Dashboard2 = () => {
         status: designationStatus,
         ...(editingDesignationId && { sId: editingDesignationId }),
       };
-      console.log("Sending Body 👉", bodyData);
+      console.log("Sending Body ", bodyData);
 
       const res = await fetch(
         `${import.meta.env.VITE_API_BASE_URL}${import.meta.env.VITE_DESIGNATION_CREATE_UPDATE}`,
@@ -855,7 +857,7 @@ const Dashboard2 = () => {
     if (verifyingAction) return;
 
     try {
-      setVerifyingAction(status); // 👈 track which button clicked
+      setVerifyingAction(status);
 
       const res = await fetch(
         `${import.meta.env.VITE_API_BASE_URL}${import.meta.env.VITE_HEALTHCARE_WORKER_VERIFY_API}`,
@@ -895,7 +897,7 @@ const Dashboard2 = () => {
     } catch (err) {
       notify(false, "Something went wrong");
     } finally {
-      setVerifyingAction(null); // 👈 reset
+      setVerifyingAction(null);
     }
   };
 
@@ -919,7 +921,7 @@ const Dashboard2 = () => {
 
       const result = await res.json();
 
-      console.log("API RESPONSE 👉", result);
+      console.log("API RESPONSE ", result);
 
       if (res.ok && Array.isArray(result.data) && result.data.length > 0) {
         setWorkerProfile(result.data[0]);
@@ -940,10 +942,12 @@ const Dashboard2 = () => {
     reason = null,
     documentName = "",
   ) => {
-    if (processingDocId) return;
-
     try {
-      setProcessingDocId(docId);
+      if (status === "Approved") {
+        setProcessingApproveId(docId);
+      } else {
+        setProcessingRejectId(docId);
+      }
 
       const res = await fetch(
         `${import.meta.env.VITE_API_BASE_URL}${import.meta.env.VITE_DOCUMENT_VERIFY_API}`,
@@ -969,19 +973,17 @@ const Dashboard2 = () => {
       if (res.ok) {
         notify(true, `Document ${status}`);
 
-        // 🔥 NO REFRESH
         setWorkerDocuments((prevDocs) =>
           prevDocs.map((doc) =>
             doc._id === docId ? { ...doc, verificationStatus: status } : doc,
           ),
         );
-      } else {
-        notify(false, data.message || "Verification failed");
       }
     } catch (err) {
       console.error("Verify error", err);
     } finally {
-      setProcessingDocId(null);
+      setProcessingApproveId(null);
+      setProcessingRejectId(null);
     }
   };
   useEffect(() => {
@@ -1252,17 +1254,17 @@ const Dashboard2 = () => {
 
                   <div className="flex-1 overflow-y-auto divide-y divide-slate-100">
                     {loadingWorkers ? (
-                      /* 🔥 LOADER SECTION */
+                      /*  LOADER SECTION */
                       <div className="flex items-center justify-center py-24">
                         <AdvancedPeopleLoader />
                       </div>
                     ) : workers.length === 0 ? (
-                      /* 🔥 EMPTY STATE */
+                      /* EMPTY STATE */
                       <div className="py-16 text-center text-slate-500 font-medium">
                         No workers found
                       </div>
                     ) : (
-                      /* 🔥 TABLE DATA */
+                      /* TABLE DATA */
                       workers.map((item) => (
                         <div
                           key={item._id}
@@ -1532,19 +1534,18 @@ const Dashboard2 = () => {
                                         doc.documentName,
                                       )
                                     }
-                                    disabled={processingDocId === doc._id}
+                                    disabled={processingApproveId === doc._id}
                                     className={`text-white text-xs px-2 py-1 rounded flex items-center gap-1
-    ${
-      processingDocId === doc._id
-        ? "bg-gray-400 cursor-not-allowed"
-        : "bg-green-500 hover:bg-green-600"
-    }
-  `}
+  ${
+    processingApproveId === doc._id
+      ? "bg-gray-400 cursor-not-allowed"
+      : "bg-green-500 hover:bg-green-600"
+  }`}
                                   >
-                                    {processingDocId === doc._id && (
+                                    {processingApproveId === doc._id && (
                                       <span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
                                     )}
-                                    {processingDocId === doc._id
+                                    {processingApproveId === doc._id
                                       ? "Processing..."
                                       : "Approve"}
                                   </button>
@@ -1555,16 +1556,20 @@ const Dashboard2 = () => {
                                       setRejectReason("");
                                       setShowRejectModal(true);
                                     }}
-                                    disabled={processingDocId === doc._id}
-                                    className={`text-white text-xs px-2 py-1 rounded
-    ${
-      processingDocId === doc._id
-        ? "bg-gray-400 cursor-not-allowed"
-        : "bg-red-500 hover:bg-red-600"
-    }
-  `}
+                                    disabled={processingRejectId === doc._id}
+                                    className={`text-white text-xs px-2 py-1 rounded flex items-center gap-1
+  ${
+    processingRejectId === doc._id
+      ? "bg-gray-400 cursor-not-allowed"
+      : "bg-red-500 hover:bg-red-600"
+  }`}
                                   >
-                                    Reject
+                                    {processingRejectId === doc._id && (
+                                      <span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                                    )}
+                                    {processingRejectId === doc._id
+                                      ? "Processing..."
+                                      : "Reject"}
                                   </button>
                                 </div>
                               </div>
@@ -1745,7 +1750,7 @@ const Dashboard2 = () => {
                           <img
                             src={
                               workerProfile?.imageUrl
-                                ? `http://192.168.0.159:3000/uploads/${workerProfile.imageUrl}`
+                                ? `http://192.168.0.33:3000/uploads/${workerProfile.imageUrl}`
                                 : "https://via.placeholder.com/150"
                             }
                             alt="Profile"
@@ -1774,42 +1779,52 @@ const Dashboard2 = () => {
                         <div className="flex items-center gap-4">
                           {/* APPROVE BUTTON */}
                           <button
-  onClick={() =>
-    verifyHealthcareWorker(workerProfile._id, "Verified")
-  }
-  disabled={verifyingAction !== null}
-  className={`px-4 py-1.5 rounded-lg text-sm text-white flex items-center gap-2
+                            onClick={() =>
+                              verifyHealthcareWorker(
+                                workerProfile._id,
+                                "Verified",
+                              )
+                            }
+                            disabled={verifyingAction !== null}
+                            className={`px-4 py-1.5 rounded-lg text-sm text-white flex items-center gap-2
     ${
       verifyingAction === "Verified"
         ? "bg-gray-400 cursor-not-allowed"
         : "bg-green-500 hover:bg-green-600"
     }
   `}
->
-  {verifyingAction === "Verified" && (
-    <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
-  )}
-  {verifyingAction === "Verified" ? "Processing..." : "Approve"}
-</button>
+                          >
+                            {verifyingAction === "Verified" && (
+                              <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                            )}
+                            {verifyingAction === "Verified"
+                              ? "Processing..."
+                              : "Approve"}
+                          </button>
 
-                         <button
-  onClick={() =>
-    verifyHealthcareWorker(workerProfile._id, "Rejected")
-  }
-  disabled={verifyingAction !== null}
-  className={`px-4 py-1.5 rounded-lg text-sm text-white flex items-center gap-2
+                          <button
+                            onClick={() =>
+                              verifyHealthcareWorker(
+                                workerProfile._id,
+                                "Rejected",
+                              )
+                            }
+                            disabled={verifyingAction !== null}
+                            className={`px-4 py-1.5 rounded-lg text-sm text-white flex items-center gap-2
     ${
       verifyingAction === "Rejected"
         ? "bg-gray-400 cursor-not-allowed"
         : "bg-red-500 hover:bg-red-600"
     }
   `}
->
-  {verifyingAction === "Rejected" && (
-    <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
-  )}
-  {verifyingAction === "Rejected" ? "Processing..." : "Reject"}
-</button>
+                          >
+                            {verifyingAction === "Rejected" && (
+                              <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                            )}
+                            {verifyingAction === "Rejected"
+                              ? "Processing..."
+                              : "Reject"}
+                          </button>
 
                           <button
                             onClick={() => {
@@ -2352,9 +2367,23 @@ const Dashboard2 = () => {
                                                 doc.documentName,
                                               )
                                             }
-                                            className="bg-green-500 text-white text-xs px-2 py-1 rounded"
+                                            disabled={
+                                              processingApproveId === doc._id
+                                            }
+                                            className={`text-white text-xs px-2 py-1 rounded flex items-center gap-1
+  ${
+    processingApproveId === doc._id
+      ? "bg-gray-400 cursor-not-allowed"
+      : "bg-green-500 hover:bg-green-600"
+  }`}
                                           >
-                                            Approve
+                                            {processingApproveId ===
+                                              doc._id && (
+                                              <span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                                            )}
+                                            {processingApproveId === doc._id
+                                              ? "Processing..."
+                                              : "Approve"}
                                           </button>
                                         </div>
 
@@ -2365,14 +2394,26 @@ const Dashboard2 = () => {
                                               setSelectedDocId(doc._id);
                                               setSelectedDocName(
                                                 doc.documentName,
-                                              ); // ✅ add this
-
+                                              );
                                               setRejectReason("");
                                               setShowRejectModal(true);
                                             }}
-                                            className="bg-red-500 text-white text-xs px-2 py-1 rounded"
+                                            disabled={
+                                              processingRejectId === doc._id
+                                            }
+                                            className={`text-white text-xs px-2 py-1 rounded flex items-center gap-1
+  ${
+    processingRejectId === doc._id
+      ? "bg-gray-400 cursor-not-allowed"
+      : "bg-red-500 hover:bg-red-600"
+  }`}
                                           >
-                                            Reject
+                                            {processingRejectId === doc._id && (
+                                              <span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                                            )}
+                                            {processingRejectId === doc._id
+                                              ? "Processing..."
+                                              : "Reject"}
                                           </button>
                                         </div>
                                       </div>
@@ -2990,7 +3031,7 @@ const Dashboard2 = () => {
                 <img
                   src={
                     currentUser?.imageUrl
-                      ? `http://192.168.0.53:3000/uploads/${currentUser.imageUrl}`
+                      ? `http://192.168.0.33:3000/uploads/${currentUser.imageUrl}`
                       : "https://i.pravatar.cc/100"
                   }
                   alt="Profile"
@@ -3161,13 +3202,13 @@ const Dashboard2 = () => {
                     className="px-6 py-2 bg-[#4039AD] text-white rounded-lg text-sm"
                   >
                     Save Changes
-                  </button>
+                  </button>  
                 </div>
               </div>
             </div>
           </div>
         )}
-      </main>
+      </main> 
       {showDocTypeModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-white rounded-xl p-6 w-[360px] shadow-lg">

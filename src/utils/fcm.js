@@ -17,21 +17,31 @@ export const setupFCM = async (setLiveNotification, audioRef) => {
 
     console.log("✅ FCM TOKEN:", token);
 
-    // Foreground listener
+    // 🔥 FOREGROUND MESSAGE (POPUP)
     onMessage(messaging, (payload) => {
-      setLiveNotification({
-        title: payload.data?.title,
-        body: payload.data?.body,
-      });
+      console.log("🔥 Foreground message:", payload);
 
-      if (audioRef.current) {
+      const title =
+        payload.notification?.title || payload.data?.title;
+
+      const body =
+        payload.notification?.body || payload.data?.body;
+
+      if (setLiveNotification) {
+        setLiveNotification({
+          title,
+          body,
+        });
+
+        setTimeout(() => {
+          setLiveNotification(null);
+        }, 5000);
+      }
+
+      if (audioRef?.current) {
         audioRef.current.currentTime = 0;
         audioRef.current.play().catch(() => {});
       }
-
-      setTimeout(() => {
-        setLiveNotification(null);
-      }, 5000);
     });
 
     return token;

@@ -95,7 +95,6 @@ const [mobileResending, setMobileResending] = useState(false);
     return () => clearInterval(interval);
   }, [showOtpModal]);
 
-  // ================= OTP CHANGE =================
   const handleOtpChange = (value, index, type) => {
     if (!/^[0-9]?$/.test(value)) return;
 
@@ -113,7 +112,6 @@ const [mobileResending, setMobileResending] = useState(false);
     if (!value && index > 0) refs.current[index - 1]?.focus();
   };
 
-  // ================= VERIFY =================
   const handleOtpVerify = async (type) => {
   const otp =
     type === "email"

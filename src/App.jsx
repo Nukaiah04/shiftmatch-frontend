@@ -8,76 +8,98 @@ import Login from "./Authentication.jsx/Login";
 import Dashboard from "./pages/Dashboard";
 import Dashboard2 from "./pages/Dashboard2";
 import AddFacility from "./pages/AddFacility";
-import ResetPassword from "./pages/ResetPassword";
 
 const App = () => {
 
   const [liveNotification, setLiveNotification] = useState(null);
   const audioRef = useRef(null);
-  if ("serviceWorker" in navigator) {
-  navigator.serviceWorker
-    .register("/firebase-messaging-sw.js")
-    .then((registration) => {
-      console.log("✅ SW registered:", registration);
-    })
-    .catch((err) => {
-      console.log("❌ SW registration failed:", err);
-    });
-}
 
   useEffect(() => {
 
     let unsubscribe;
 
-    // const setupFCM = async () => {
-    //   try {
-    //     console.log("Requesting permission...");
+    const setupFCM = async () => {
+      try {
 
-    //     const permission = await Notification.requestPermission();
-    //     console.log("Permission:", permission);
+        console.log("🔔 Requesting Notification Permission");
 
-    //     if (permission !== "granted") return;
+        const permission = await Notification.requestPermission();
 
-    //     const registration = await navigator.serviceWorker.register(
-    //       "/firebase-messaging-sw.js"
-    //     );
+        if (permission !== "granted") {
+          console.log("❌ Notification permission denied");
+          return;
+        }
 
-    //     const token = await getToken(messaging, {
-    //       vapidKey:
-    //         "BKrmqPYRerzCt_4JEjQELdYK4-W0VFSVFvl9Tu-O7MkvW5hC7duEi5snp0DlOAquLirdyeo-b_AwOml_56yQK4s",
-    //       serviceWorkerRegistration: registration,
-    //     });
+        // Register service worker
+        const registration = await navigator.serviceWorker.register(
+          "/firebase-messaging-sw.js"
+        );
 
-    //     console.log("FCM TOKEN:", token);
+        console.log("✅ Service Worker Registered:", registration);
 
-    //     // 🔥 FOREGROUND LISTENER
-    //     unsubscribe = onMessage(messaging, (payload) => {
-    //       console.log("🔥 FOREGROUND MESSAGE:", payload);
+        // Get FCM token
+        const token = await getToken(messaging, {
+          vapidKey: import.meta.env.VITE_FIREBASE_VAPID_KEY,
+          serviceWorkerRegistration: registration,
+        });
 
-    //       setLiveNotification({
-    //         title: payload.data?.title,
-    //         body: payload.data?.body,
-    //       });
+        console.log("🔥 FCM TOKEN:", token);
 
-    //       if (audioRef.current) {
-    //         audioRef.current.currentTime = 0;
-    //         audioRef.current.play().catch((err) => {
-    //           console.log("Sound blocked:", err);
-    //         });
-    //       }
+        // Save token if needed
+        sessionStorage.setItem("fcmToken", token);
 
-    //       // Auto close after 5 sec
-    //       setTimeout(() => {
-    //         setLiveNotification(null);
-    //       }, 5000);
-    //     });
+        // 🔥 FOREGROUND MESSAGE LISTENER
+        unsubscribe = onMessage(messaging, (payload) => {
 
-    //   } catch (error) {
-    //     console.error("FCM Setup Error:", error);
-    //   }
-    // };
+          console.log("🔥 FOREGROUND MESSAGE:", payload);
 
-    // setupFCM();
+          const title =
+            payload.notification?.title ||
+            payload.data?.title ||
+            "New Notification";
+
+          const body =
+            payload.notification?.body ||
+            payload.data?.body ||
+            "";
+
+          // 🔔 Browser Notification
+          if (Notification.permission === "granted") {
+            navigator.serviceWorker.getRegistration().then((reg) => {
+              reg.showNotification(title, {
+                body: body,
+                icon: "/logo.png",
+                badge: "/logo.png"
+              });
+            });
+          }
+
+          // 🔔 React Popup
+          setLiveNotification({
+            title,
+            body,
+            id: Date.now()
+          });
+
+          // 🔊 Play Sound
+          if (audioRef.current) {
+            audioRef.current.currentTime = 0;
+            audioRef.current.play().catch(() => {});
+          }
+
+          // Auto close popup
+          setTimeout(() => {
+            setLiveNotification(null);
+          }, 5000);
+
+        });
+
+      } catch (error) {
+        console.error("FCM Setup Error:", error);
+      }
+    };
+
+    setupFCM();
 
     return () => {
       if (unsubscribe) unsubscribe();
@@ -87,52 +109,65 @@ const App = () => {
 
   return (
     <>
+
+      {/* 🔊 Notification Sound */}
       <audio
         ref={audioRef}
         src="/notification.mp3"
         preload="auto"
       />
 
+      {/* 🔔 POPUP NOTIFICATION */}
       {liveNotification && (
         <div className="fixed top-6 right-6 z-50 animate-slide-in">
-          <div className="bg-black text-white w-80 rounded-lg shadow-2xl p-4">
+
+          <div className="bg-white border shadow-xl w-80 rounded-xl p-4">
 
             <div className="flex justify-between items-start">
+
               <div>
-                <h4 className="font-semibold text-sm">
+                <h4 className="font-semibold text-gray-800 text-sm">
                   {liveNotification.title}
                 </h4>
-                <p className="text-xs text-gray-300 mt-1">
+
+                <p className="text-xs text-gray-500 mt-1">
                   {liveNotification.body}
                 </p>
               </div>
+
               <button
                 onClick={() => setLiveNotification(null)}
-                className="text-gray-400 hover:text-white text-sm"
+                className="text-gray-400 hover:text-gray-700"
               >
                 ✕
               </button>
+
             </div>
 
-            <button className="mt-4 bg-orange-500 hover:bg-orange-600 text-xs px-3 py-1 rounded">
+            <button className="mt-3 bg-[#4039AD] text-white text-xs px-3 py-1 rounded">
               Check Now
             </button>
 
           </div>
+
         </div>
       )}
 
       <BrowserRouter>
+
         <ToastContainer />
+
         <Routes>
           <Route path="/" element={<Login />} />
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/dashboard2" element={<Dashboard2 />} />
           <Route path="/add-facility" element={<AddFacility />} />
           <Route path="/login" element={<Login />} />
-          <Route path="/reset-password" element={<ResetPassword />} />
+
         </Routes>
+
       </BrowserRouter>
+
     </>
   );
 };
