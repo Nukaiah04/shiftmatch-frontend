@@ -3,7 +3,6 @@ import { useEffect, useState, useRef } from "react";
 import { ToastContainer } from "react-toastify";
 import { getToken, onMessage } from "firebase/messaging";
 import { messaging } from "./firebase";
-
 import Login from "./Authentication.jsx/Login";
 import Dashboard from "./pages/Dashboard";
 import Dashboard2 from "./pages/Dashboard2";
@@ -21,21 +20,20 @@ const App = () => {
     const setupFCM = async () => {
       try {
 
-        console.log("🔔 Requesting Notification Permission");
+        console.log("Requesting Notification Permission");
 
         const permission = await Notification.requestPermission();
 
         if (permission !== "granted") {
-          console.log("❌ Notification permission denied");
+          console.log(" Notification permission denied");
           return;
         }
 
-        // Register service worker
         const registration = await navigator.serviceWorker.register(
           "/firebase-messaging-sw.js"
         );
 
-        console.log("✅ Service Worker Registered:", registration);
+        console.log(" Service Worker Registered:", registration);
 
         // Get FCM token
         const token = await getToken(messaging, {
@@ -43,15 +41,13 @@ const App = () => {
           serviceWorkerRegistration: registration,
         });
 
-        console.log("🔥 FCM TOKEN:", token);
+        console.log(" FCM TOKEN:", token);
 
-        // Save token if needed
         sessionStorage.setItem("fcmToken", token);
 
-        // 🔥 FOREGROUND MESSAGE LISTENER
         unsubscribe = onMessage(messaging, (payload) => {
 
-          console.log("🔥 FOREGROUND MESSAGE:", payload);
+          console.log(" FOREGROUND MESSAGE:", payload);
 
           const title =
             payload.notification?.title ||
@@ -63,7 +59,6 @@ const App = () => {
             payload.data?.body ||
             "";
 
-          // 🔔 Browser Notification
           if (Notification.permission === "granted") {
             navigator.serviceWorker.getRegistration().then((reg) => {
               reg.showNotification(title, {
@@ -74,20 +69,17 @@ const App = () => {
             });
           }
 
-          // 🔔 React Popup
           setLiveNotification({
             title,
             body,
             id: Date.now()
           });
 
-          // 🔊 Play Sound
           if (audioRef.current) {
             audioRef.current.currentTime = 0;
             audioRef.current.play().catch(() => {});
           }
 
-          // Auto close popup
           setTimeout(() => {
             setLiveNotification(null);
           }, 5000);
@@ -110,14 +102,14 @@ const App = () => {
   return (
     <>
 
-      {/* 🔊 Notification Sound */}
+      {/*  Notification Sound */}
       <audio
         ref={audioRef}
         src="/notification.mp3"
         preload="auto"
       />
 
-      {/* 🔔 POPUP NOTIFICATION */}
+      {/*  POPUP NOTIFICATION */}
       {liveNotification && (
         <div className="fixed top-6 right-6 z-50 animate-slide-in">
 

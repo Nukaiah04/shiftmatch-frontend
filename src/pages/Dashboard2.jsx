@@ -1600,7 +1600,7 @@ const Dashboard2 = () => {
                     style={{
                       display: "grid",
                       gridTemplateColumns:
-                        "3fr 2fr 1.5fr 1.5fr 1.5fr 1.5fr 1.5fr",
+                        "3fr 2fr 1.5fr 1.5fr 1.5fr 1.6fr 1.5fr",
                     }}
                   >
                     <div>Facility</div>
@@ -1625,49 +1625,35 @@ const Dashboard2 = () => {
                       currentHealthcareWorkers.map((item) => (
                         <div
                           key={item._id}
-                          className="px-6 py-4 text-sm hover:bg-slate-50 transition"
+                          className="px-6 py-4 text-sm hover:bg-slate-50 transition items-center"
                           style={{
                             display: "grid",
                             gridTemplateColumns:
-                              "3fr 2fr 1.5fr 1.5fr 1.5fr 1.5fr 1.5fr",
+                              "2.8fr 1.7fr 1.5fr 1.5fr 1.2fr 1.2fr 1.5fr",
                           }}
                         >
                           <div className="flex items-center gap-3">
-                            {/* Avatar */}
-                            <div className="w-9 h-9 rounded-full overflow-hidden flex-shrink-0">
-                              {item.imageUrl ? (
-                                <img
-                                  src={`${import.meta.env.VITE_API_BASE_URL}/uploads/${item.imageUrl}`}
-                                  alt={item.fullName}
-                                  className="w-full h-full object-cover"
-                                />
-                              ) : (
-                                <div
-                                  className={`w-full h-full flex items-center justify-center text-xs font-bold ${getAvatarColor(
-                                    item.fullName,
-                                  )}`}
-                                >
-                                  {item.fullName?.slice(0, 2).toUpperCase()}
-                                </div>
-                              )}
-                            </div>
+  <div className="w-16 h-16 rounded-full overflow-hidden flex-shrink-0 border">
+    <img
+      src={`${import.meta.env.VITE_API_BASE_URL}/uploads/${item.imageUrl}`}
+      alt={item.fullName}
+      className="w-full h-full object-cover"
+    />
+  </div>
 
-                            {/* Name */}
-                            <span className="font-semibold text-slate-800 truncate max-w-[200px]">
-                              {item.fullName}
-                            </span>
-                          </div>
-
+  <span className="font-semibold text-slate-800 truncate">
+    {item.fullName}
+  </span>
+</div>
                           <div className="text-slate-600 text-sm">
                             <span className="font-semibold font-sans text-slate-800 truncate max-w-[160px] block">
                               {item.email}
                             </span>
                           </div>
 
-                          <div className="text-slate-600 text-sm">
-                            {item.mobileNumber}
-                          </div>
-
+          <div className="text-slate-800 text-sm font-semibold">
+  {item.mobileNumber}
+</div>
                           <div>
                             <span
                               className={`px-3 py-1 rounded-full text-xs font-semibold ${getStatusColor(
@@ -1750,7 +1736,7 @@ const Dashboard2 = () => {
                           <img
                             src={
                               workerProfile?.imageUrl
-                                ? `http://192.168.0.33:3000/uploads/${workerProfile.imageUrl}`
+                                ? `http://192.168.0.265:3000/uploads/${workerProfile.imageUrl}`
                                 : "https://via.placeholder.com/150"
                             }
                             alt="Profile"
@@ -3031,7 +3017,7 @@ const Dashboard2 = () => {
                 <img
                   src={
                     currentUser?.imageUrl
-                      ? `http://192.168.0.33:3000/uploads/${currentUser.imageUrl}`
+                      ? `http://192.168.0.245:3000/uploads/${currentUser.imageUrl}`
                       : "https://i.pravatar.cc/100"
                   }
                   alt="Profile"

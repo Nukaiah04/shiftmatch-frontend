@@ -181,9 +181,52 @@ const Dashboard = () => {
       setLoadingDocs(false);
     }
   };
-  const handleSubmitDocument = async () => {
-    try {
-      setIsUploading(true);
+ const handleSubmitDocument = async () => {
+  try {
+    setIsUploading(true);
+
+    
+    if (!isEditMode) {
+      if (!selectedDocument?._id || !selectedFile) {
+        notify(false, "Please select document and file");
+        return;
+      }
+
+     const formData = new FormData();
+formData.append("file", selectedFile);
+formData.append("documentTypeId", selectedDocument._id);
+formData.append("hospitalId", sessionStorage.getItem("userId")); // ✅ IMPORTANT
+formData.append("issuedBy", issuedBy);
+formData.append("issueDate", issueDate);
+formData.append("expiryDate", expiryDate);
+
+      const res = await fetch(
+        `${import.meta.env.VITE_API_BASE_URL}${import.meta.env.VITE_DOCUMENT_UPLOAD_API}`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${sessionStorage.getItem("token")}`,
+          },
+          body: formData,
+        }
+      );
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        notify(false, data.message || "Upload failed");
+        return;
+      }
+
+      notify(true, "Document uploaded successfully");
+    }
+
+    
+    else {
+      if (!selectedUploadedDoc?._id) {
+        notify(false, "No document selected");
+        return;
+      }
 
       const res = await fetch(
         `${import.meta.env.VITE_API_BASE_URL}${import.meta.env.VITE_DOCUMENT_UPDATE_DETAILS_API}`,
@@ -195,11 +238,11 @@ const Dashboard = () => {
           },
           body: JSON.stringify({
             sId: selectedUploadedDoc._id,
-            issuedBy: issuedBy,
-            issueDate: issueDate,
-            expiryDate: expiryDate,
+            issuedBy,
+            issueDate,
+            expiryDate,
           }),
-        },
+        }
       );
 
       const data = await res.json();
@@ -210,17 +253,20 @@ const Dashboard = () => {
       }
 
       notify(true, "Details updated successfully");
-
-      await fetchUploadedDocuments();
-      setUploadDrawerDoc(null);
-      setIsEditMode(false);
-    } catch (err) {
-      console.error(err);
-      notify(false, "Server error");
-    } finally {
-      setIsUploading(false);
     }
-  };
+
+    await fetchUploadedDocuments();
+    setUploadDrawerDoc(null);
+    setIsEditMode(false);
+    setSelectedFile(null);
+
+  } catch (err) {
+    console.error(err);
+    notify(false, "Server error");
+  } finally {
+    setIsUploading(false);
+  }
+};
   const handleShiftStatusChange = async (shiftId, status) => {
     try {
       const res = await fetch(
@@ -3310,5 +3356,4 @@ const Dashboard = () => {
     </div>
   );
 };
-
 export default Dashboard;

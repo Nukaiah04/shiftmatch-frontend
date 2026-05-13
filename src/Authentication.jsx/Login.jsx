@@ -94,9 +94,9 @@ if (fcmToken) {
   <div className="flex flex-col items-center -mt-16 md:-mt-20">
     <div className="w-56 h-[2px] bg-white opacity-80 mb-4"></div>
 
-    <p className="text-lg md:text-2xl font-light tracking-wide">
-      HealthCare Facilities
-    </p>
+   <p className="text-2xl md:text-3xl font-semibold tracking-tight text-white">
+  You’re in safe hands
+</p>
   </div>
 </div>
       </div>
