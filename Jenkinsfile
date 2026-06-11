@@ -27,17 +27,17 @@ pipeline {
 
         stage('Archive Build') {
             steps {
-                archiveArtifacts artifacts: 'build/**', fingerprint: true
+                archiveArtifacts artifacts: 'build/**'
             }
         }
     }
 
     post {
         success {
-            echo 'React App Build Successful 🚀'
+            echo 'React build completed successfully 🚀'
         }
         failure {
-            echo 'Build Failed ❌'
+            echo 'Build failed ❌'
         }
     }
 }
