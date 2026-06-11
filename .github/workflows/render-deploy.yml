@@ -27,7 +27,9 @@ jobs:
         with:
           context: .
           push: true
-          tags: nukaiah04/shiftmatch-frontend:latest
+          tags: |
+            nukaiah04/shiftmatch-frontend:latest
+            nukaiah04/shiftmatch-frontend:${{ github.sha }}
 
       - name: Trigger Render Deployment
         run: curl -X POST ${{ secrets.RENDER_DEPLOY_HOOK }}
