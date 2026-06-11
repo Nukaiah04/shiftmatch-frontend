@@ -32,4 +32,4 @@ jobs:
             nukaiah04/shiftmatch-frontend:${{ github.sha }}
 
       - name: Trigger Render Deployment
-        run: curl -X POST ${{ secrets.RENDER_DEPLOY_HOOK }}
+        run: curl -X POST "${{ secrets.RENDER_DEPLOY_HOOK }}"
