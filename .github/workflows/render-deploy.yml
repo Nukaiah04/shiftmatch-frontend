@@ -29,5 +29,5 @@ jobs:
           context: .
           push: true
           tags: |
-            nukaiah04/login-project:latest
-            nukaiah04/login-project:v1
+            nukaiah04/shiftmatch-frontend:latest
+            nukaiah04/shiftmatch-frontend:v1
