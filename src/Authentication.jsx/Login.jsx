@@ -117,7 +117,7 @@ if (fcmToken) {
       <HiOutlineMail className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 text-lg" />
       <input
         type="email"
-        placeholder="Email Address"
+        placeholder="Mobile Number"
         value={email}
         onChange={(e) => setEmail(e.target.value)}
         className="w-full pl-12 pr-4 py-3 rounded-lg bg-gray-100 focus:outline-none focus:ring-2 focus:ring-[#4039AD]"
