@@ -104,13 +104,13 @@ if (fcmToken) {
      <div className="w-full md:w-1/2 bg-white flex items-center justify-center py-10 md:py-0"> 
 <div className="w-[90%] md:w-[420px]">
 
-    <h2 className="text-3xl font-semibold text-gray-900 mb-2">
+    {/* <h2 className="text-3xl font-semibold text-gray-900 mb-2">
       Welcome Back
     </h2>
 
     <p className="text-gray-500 mb-8">
       To keep connected with us login with your personal info
-    </p>
+    </p> */}
 
     {/* Email */}
     <div className="mb-5 relative">
