@@ -5,11 +5,12 @@ pipeline {
         nodejs "NodeJS"
     }
 
-    stage('Checkout Code') {
-    steps {
-        git url: 'https://github.com/Nukaiah04/shiftmatch-frontend.git', branch: 'main'
-    }
-}
+    stages {
+        stage('Checkout Code') {
+            steps {
+                git url: 'https://github.com/Nukaiah04/shiftmatch-frontend.git', branch: 'main'
+            }
+        }
 
         stage('Install Dependencies') {
             steps {
