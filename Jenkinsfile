@@ -1,9 +1,10 @@
-pipeline {
+pipeline
+{
     agent any
 
     tools {
-        nodejs "NodeJS"
-    }
+            nodejs "NodeJS"
+          }
 
     stages {
         stage('Checkout Code') {
@@ -25,9 +26,10 @@ pipeline {
         }
 
         stage('Archive Build') {
-            steps {
-                archiveArtifacts artifacts: 'build/**'
-            }
+    steps {
+        archiveArtifacts artifacts: 'dist/**'
+    }
+}
         }
     }
 
@@ -39,4 +41,3 @@ pipeline {
             echo 'Build failed ❌'
         }
     }
-}
