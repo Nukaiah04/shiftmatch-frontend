@@ -8,37 +8,58 @@ pipeline {
     stages {
         stage('Checkout Code') {
             steps {
-                // Using 'checkout scm' automatically reuses the job's git configuration safely
+                // Automatically checks out your repository using your job's SCM settings
                 checkout scm
             }
         }
 
         stage('Install Dependencies') {
             steps {
+                echo 'Installing project dependencies... 📦'
                 bat 'npm install'
             }
         }
 
         stage('Build React App') {
             steps {
+                echo 'Compiling React production build via Vite... ⚡'
                 bat 'npm run build'
             }
         }
 
         stage('Archive Build') {
             steps {
-                // Fixed: Changed 'build/**' to 'dist/**' to match Vite's actual output folder
+                echo 'Archiving build artifacts... 🗄️'
+                // Vite outputs production code into the 'dist' folder
                 archiveArtifacts artifacts: 'dist/**'
             }
         }
-    } // <-- This closes the STAGES block
+
+        stage('Build & Push Docker Image') {
+            steps {
+                echo 'Building local Docker container... 🐳'
+                bat 'docker build -t nukaiah04/shiftmatch-frontend:latest .'
+                
+                // Securely fetches your saved 'docker-hub-credentials' and hides them from the console logs
+                withCredentials([usernamePassword(credentialsId: 'docker-hub-credentials', 
+                                                 usernameVariable: 'DOCKER_USER', 
+                                                 passwordVariable: 'DOCKER_PASS')]) {
+                    echo 'Logging securely into Docker Hub... 🔐'
+                    bat 'echo %DOCKER_PASS% | docker login -u %DOCKER_USER% --password-stdin'
+                    
+                    echo 'Pushing container image to your Docker Hub repository... 🚀'
+                    bat 'docker push nukaiah04/shiftmatch-frontend:latest'
+                }
+            }
+        }
+    }
 
     post { 
         success {
-            echo 'React build completed successfully 🚀'
+            echo 'React build, testing, and Docker Hub delivery completed successfully! 🚀'
         }
         failure {
-            echo 'Build failed ❌'
+            echo 'Pipeline compilation or delivery execution failed ❌'
         }
-    } // <-- This closes the POST block
-} // <-- This closes the PIPELINE block
+    }
+}
