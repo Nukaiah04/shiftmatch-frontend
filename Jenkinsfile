@@ -1,15 +1,15 @@
-pipeline
-{
+pipeline {
     agent any
 
     tools {
-            nodejs "NodeJS"
-          }
+        nodejs "NodeJS"
+    }
 
     stages {
         stage('Checkout Code') {
             steps {
-                git url: 'https://github.com/Nukaiah04/shiftmatch-frontend.git', branch: 'main'
+                // Using 'checkout scm' automatically reuses the job's git configuration safely
+                checkout scm
             }
         }
 
@@ -26,18 +26,19 @@ pipeline
         }
 
         stage('Archive Build') {
-    steps {
-        archiveArtifacts artifacts: 'dist/**'
-    }
-}
+            steps {
+                // Fixed: Changed 'build/**' to 'dist/**' to match Vite's actual output folder
+                archiveArtifacts artifacts: 'dist/**'
+            }
         }
-    }
+    } // <-- This closes the STAGES block
 
-    post {
+    post { 
         success {
             echo 'React build completed successfully 🚀'
         }
         failure {
             echo 'Build failed ❌'
         }
-    }
+    } // <-- This closes the POST block
+} // <-- This closes the PIPELINE block
